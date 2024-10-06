@@ -3,31 +3,26 @@ import threading
 import json
 import time
 from collections import deque
-from gps3 import gps3
-
+import requests
 HOST = '0.0.0.0'  # Сервер будет слушать на всех интерфейсах
 PORT = 5000
 AUTHORIZED_CLIENTS = {"client1": "password1", "client2": "password2"}  # Авторизация клиентов
 positions = deque(maxlen=10)  # Храним последние 10 позиций для сглаживания
 
-gpsd_socket = gps3.GPSDSocket()
-data_stream = gps3.DataStream()
-gpsd_socket.connect()
-gpsd_socket.watch()
 
+def get_location_data():
+    try:
+        response = requests.get("http://ip-api.com/json/")
+        response.raise_for_status()
+        location_data = response.json()
+        
+        latitude = location_data.get("lat")
+        longitude = location_data.get("lon")
 
-
-def get_gps_data():
-    for new_data in gpsd_socket:
-        if new_data:
-            data_stream.unpack(new_data)
-            longitude = data_stream.TPV['alt']
-            latitude = data_stream.TPV['lat']
-            print(f"Широта: {latitude}, Долгота: {longitude}")
-            return {
-                "latitude": latitude,
-                "longitude": longitude,
-            }
+        return {"latitude": latitude,
+                "longitude": longitude}
+    except requests.exceptions.RequestException as e:
+        print(f"Ошибка получения местоположения: {e}")
     return None
 
 def client_handler(conn, addr):
@@ -45,14 +40,14 @@ def client_handler(conn, addr):
         conn.sendall(b"Authorized")
         
         while True:
-            gps_data = get_gps_data()
-            if not gps_data:
+            loc_data = get_location_data()
+            if not loc_data:
                 continue
             position_counter += 1
             output_data = {
                 "position_id": position_counter,
                 "timestamp": time.time(),
-                **gps_data
+                **loc_data
             }
             positions.append(output_data)
 

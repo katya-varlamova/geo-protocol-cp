@@ -41,7 +41,7 @@ def connect_to_server():
                 break  # Выход, если соединение закрыто
             buf += data
             extracted, buf = extract_json_and_buffer(buf)
-            #print(extracted, buf)
+            print(extracted)
 
     finally:
         client.close()
