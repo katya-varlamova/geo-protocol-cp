@@ -3,8 +3,8 @@ import json
 import time
 from collections import deque
 
-HOST = 'localhost'  # Адрес сервера
-PORT = 5000  # Порт сервера
+HOST = 'localhost'
+PORT = 5000
 USERNAME = "client1"
 PASSWORD = "password1"
 MAX_BUFFER_SIZE = 5
@@ -38,7 +38,7 @@ def connect_to_server():
         while True:
             data = client.recv(1024).decode()
             if not data:
-                break  # Выход, если соединение закрыто
+                break
             buf += data
             extracted, buf = extract_json_and_buffer(buf)
             print(extracted)

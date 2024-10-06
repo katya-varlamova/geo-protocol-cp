@@ -4,13 +4,14 @@ import json
 import time
 from collections import deque
 import requests
-HOST = '0.0.0.0'  # Сервер будет слушать на всех интерфейсах
-PORT = 5000
-AUTHORIZED_CLIENTS = {"client1": "password1", "client2": "password2"}  # Авторизация клиентов
-positions = deque(maxlen=10)  # Храним последние 10 позиций для сглаживания
+from geopy.geocoders import Nominatim
+HOST = '0.0.0.0'
+PORT = 5001
+AUTHORIZED_CLIENTS = {"client1": "password1", "client2": "password2"}
+positions = deque(maxlen=10)
+mul = 1
 
-
-def get_location_data():
+def get_real_location_data():
     try:
         response = requests.get("http://ip-api.com/json/")
         response.raise_for_status()
@@ -25,12 +26,21 @@ def get_location_data():
         print(f"Ошибка получения местоположения: {e}")
     return None
 
-def client_handler(conn, addr):
+def get_fake_location_data():
+    global mul
+    latitude = 55.7482
+    longitude = 37.6171
+    x = 0.0001
+    y = 0.0001
+    mul += 1
+    return {"latitude": latitude + x * mul,
+            "longitude": longitude + x * mul}
+
+def client_handler(conn, addr, get_location_data=get_fake_location_data):
     position_counter = 0
     print(f"Подключен клиент: {addr}")
 
     try:
-        # Запрос авторизации от клиента
         credentials = conn.recv(1024).decode()
         username, password = credentials.split(',')
         if AUTHORIZED_CLIENTS.get(username) != password:
@@ -51,7 +61,6 @@ def client_handler(conn, addr):
             }
             positions.append(output_data)
 
-            # Сглаживание данных (скользящее среднее)
             avg_latitude = sum(pos["latitude"] for pos in positions) / len(positions)
             avg_longitude = sum(pos["longitude"] for pos in positions) / len(positions)
 
@@ -61,10 +70,9 @@ def client_handler(conn, addr):
                 "latitude": avg_latitude,
                 "longitude": avg_longitude
             }
-            #print(smoothed_output)
 
-            conn.sendall((json.dumps(smoothed_output) + ";").encode())  # Отправляем данные клиенту
-            time.sleep(0.00001)  # Пауза 1 секунда между отправками
+            conn.sendall((json.dumps(smoothed_output) + ";").encode())
+            time.sleep(0.01)
     finally:
         conn.close()
 
