@@ -33,7 +33,6 @@ def connect_to_server():
         pass
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect((HOST, PORT))
-
     client.sendall(f"{username},{password}".encode())
     response = client.recv(1024).decode()
 
