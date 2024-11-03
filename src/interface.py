@@ -17,8 +17,9 @@ import sys
 import time
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
 from PyQt5.QtWidgets import QMainWindow, QApplication
+import os
 
-MAP_HTML_PATH = "/home/kate/Desktop/geo_protocol/src/real_time_map.html"
+MAP_HTML_PATH = os.path.join(os.getcwd(), 'real_time_map.html')
 
 class GeopositionSignal(QObject):
     geopositionUpdated = pyqtSignal(tuple)
