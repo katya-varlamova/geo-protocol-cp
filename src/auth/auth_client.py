@@ -1,7 +1,7 @@
 import requests
 import json
 from diffiehellman.diffiehellman import DiffieHellman
-from encryption_utils import encrypt_data, decrypt_data
+from utils.encryption_utils import encrypt_data, decrypt_data
 class AuthClient:
     def __init__(self, url='http://127.0.0.1:5000'):
         self.instance_dh = DiffieHellman()

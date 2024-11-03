@@ -1,8 +1,8 @@
 import socket
 import json
 import time
-from encryption_utils import encrypt_data, decrypt_data
-from gps_utils import LocationService
+from utils.encryption_utils import encrypt_data, decrypt_data
+from utils.gps_utils import LocationService
 def udp_sender(port, key, cur_token):
     frame_num = 0
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

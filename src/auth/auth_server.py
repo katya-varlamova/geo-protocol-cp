@@ -4,8 +4,8 @@ import sqlite3
 from flask import Flask, request, jsonify
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 from diffiehellman.diffiehellman import DiffieHellman
-from encryption_utils import encrypt_data, decrypt_data
-from jwt_utils import generate_jwt, validate_jwt
+from utils.encryption_utils import encrypt_data, decrypt_data
+from utils.jwt_utils import generate_jwt, validate_jwt
 class Client:
     def __init__(self, client, token = None, key = None):
         self.client =  client

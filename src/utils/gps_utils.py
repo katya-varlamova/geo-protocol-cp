@@ -3,7 +3,7 @@ import requests
 from geopy.geocoders import Nominatim
 import random
 import numpy as np
-from filters import kalman_filter, sliding_window_filter
+from utils.filters import kalman_filter, sliding_window_filter
 
 class LocationService:
     def __init__(self):

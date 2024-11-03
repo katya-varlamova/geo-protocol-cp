@@ -2,9 +2,9 @@ import socket
 import json
 import time
 import threading
-from utils import udp_reciever, udp_sender
-from auth_client import AuthClient
-from encryption_utils import send_to_sock_encrypted, recv_from_sock_encrypted
+from utils.udp_utils import udp_reciever, udp_sender
+from auth.auth_client import AuthClient
+from utils.encryption_utils import send_to_sock_encrypted, recv_from_sock_encrypted
 import sys
 
 class Client:

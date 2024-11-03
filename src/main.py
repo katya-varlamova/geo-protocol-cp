@@ -10,7 +10,7 @@ import folium
 from pyqt_loading_progressbar.loadingProgressBar import LoadingProgressBar
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import random
-from auth_client import AuthClient
+from auth.auth_client import AuthClient
 from client import Reciever, Initiator
 
 import sys
