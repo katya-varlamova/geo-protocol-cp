@@ -52,6 +52,8 @@ class AuthClient:
         return response.status_code == 200
     def get_instance(self):
         return self.instance_dh
+    def get_users(self):
+        return ["test_katya_", "test_katya" ]
     
 if __name__ == "__main__":
     client = AuthClient()

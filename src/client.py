@@ -21,79 +21,98 @@ class Reciever:
         self.username = username
         self.password = password
         self.auth_client = AuthClient()
+        self.conn = None
+        self.tcp_socket = None
+        self.active = False
+        self.want_get = False
+        self.want_share = False
 
-    def work(self):
-        tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tcp_socket.bind(('localhost', 8000))
-        tcp_socket.listen(1)
+    def get_conn(self):
+        self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.tcp_socket.bind(('localhost', 8000))
+        except:
+            return False, "Ошибка подключения"
+        self.tcp_socket.listen(1)
         
         print("Ожидание подключения...")
-        conn, addr = tcp_socket.accept()
-        
-        with conn:
-            token = self.auth_client.login(self.username, self.password)
-            request = json.loads(conn.recv(4096).decode())
-            if "username_initiator" not in request or "public_key_initiator" not in request:
-                conn.close()
-                tcp_socket.close()
-                return
+        self.conn, addr = self.tcp_socket.accept()
+        self.active = True
+        request = json.loads(self.conn.recv(4096).decode())
+        if "username_initiator" not in request or "public_key_initiator" not in request:
+            self.conn.close()
+            self.tcp_socket.close()
+            self.active = False
+            return False, "Неправильный запрос от инициатора"
+        self.initiator_name = request["username_initiator"]
+        pk_initiator = request["public_key_initiator"]
+        self.key = self.auth_client.get_instance().generate_shared_secret(pk_initiator, echo_return_key=True)
+        return True, ""
 
+    def exchange(self):
+        with self.conn:
+            self.token = self.auth_client.login(self.username, self.password)
+            
 
-            conn.sendall(json.dumps({'username_reciever': self.username,
+            self.conn.sendall(json.dumps({'username_reciever': self.username,
                                     'public_key_reciever': self.auth_client.get_instance().public_key}).encode())
             
-            un_initiator = request["username_initiator"]
-            pk_initiator = request["public_key_initiator"]
-            key = self.auth_client.get_instance().generate_shared_secret(pk_initiator, echo_return_key=True)
 
 
-            data = recv_from_sock_encrypted(key, conn)
+            data = recv_from_sock_encrypted(self.key, self.conn)
 
             if not data or "token" not in data or not self.auth_client.check_token(data["token"], self.username):
-                print("Ошибка авторизации")
-                conn.close()
-                tcp_socket.close()
-                return
+                self.conn.close()
+                self.tcp_socket.close()
+                self.active = False
+                return False, "Ошибка авторизации"
 
-
-            want_share = int(input(f"Вы хотите делиться геопозицией с пользователем {un_initiator} ?"))
-            if not want_share:
-                conn.sendall(json.dumps({'error': "refused to share"}).encode())
-                conn.close()
-                tcp_socket.close()
-                return
+            #want_share = int(input(f"Вы хотите делиться геопозицией с пользователем {un_initiator} ?"))
+            if not self.want_share:
+                self.conn.sendall(json.dumps({'error': "refused to share"}).encode())
+                self.conn.close()
+                self.tcp_socket.close()
+                self.active = False
+                return False, "Отказ делиться геопозицией"
             
-            send_to_sock_encrypted(key, conn, {"token" : token})
+            send_to_sock_encrypted(self.key, self.conn, {"token" : self.token})
 
-            self.client_data[un_initiator] = Client(un_initiator, key=key, token=data["token"])
+            self.client_data[self.initiator_name] = Client(self.initiator_name, key=self.key, token=data["token"])
 
             for cl in self.client_data:
                 self.client_data[cl].print()
 
 
-            data = recv_from_sock_encrypted(key, conn)
-            want_get = False
+            data = recv_from_sock_encrypted(self.key, self.conn)
+
             if not data or "action" not in data:
-                conn.sendall(json.dumps({'error': "refused to share"}).encode())
-                print("Ошибка авторизации")
+                self.conn.sendall(json.dumps({'error': "refused to share"}).encode())
+                self.want_get = False
             else:
-                want_get = int(input(f"Вы хотите получать геопозицию пользователя {un_initiator} ?"))
+                #want_get = int(input(f"Вы хотите получать геопозицию пользователя {un_initiator} ?"))
                 type_conn = "single"
-                if want_get:
+                if self.want_get:
                     type_conn = "duplex"
-                    send_to_sock_encrypted(key, conn, {"action" : type_conn})
+                    send_to_sock_encrypted(self.key, self.conn, {"action" : type_conn})
                 else:
-                    conn.sendall(json.dumps({'error': "refused to share"}).encode())
-            tcp_socket.close()
-            udp_sender_thread = threading.Thread(target=udp_sender, args=(6001, bytes(key), token,))
-            udp_sender_thread.start()
-        
-            if want_get:
-                udp_reciever_thread = threading.Thread(target=udp_reciever, args=(6002, bytes(key), self.client_data[un_initiator].token,))
-                udp_reciever_thread.start()
-                udp_reciever_thread.join()
-            udp_sender_thread.join()
-        tcp_socket.close()
+                    self.conn.sendall(json.dumps({'error': "refused to get"}).encode())
+            self.tcp_socket.close()
+            self.tcp_socket = None
+            self.active = False
+            return True, "Success"
+
+    def exchange_geoposition(self, signal):
+        print("start")
+        udp_sender_thread = threading.Thread(target=udp_sender, args=(6001, bytes(self.key), self.token,))
+        udp_sender_thread.start()
+    
+        if self.want_get:
+            print("get")
+            udp_reciever_thread = threading.Thread(target=udp_reciever, args=(6002, bytes(self.key), self.client_data[self.initiator_name].token, signal))
+            udp_reciever_thread.start()
+            udp_reciever_thread.join()
+        udp_sender_thread.join()
+
 
             
 class Initiator:
@@ -102,59 +121,64 @@ class Initiator:
         self.username = username
         self.password = password
         self.auth_client = AuthClient()
-    def work(self):
-        token = self.auth_client.login(self.username, self.password)
-        if not token:
+        self.want_get = True
+        self.want_share = False
+        self.reciever_name = ""
+    def exchange(self):
+        self.token = self.auth_client.login(self.username, self.password)
+        if not self.token:
             return
-        
+
         tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tcp_socket.connect(('localhost', 8000))
+        try:
+            tcp_socket.connect(('localhost', 8000))
+        except:
+            return False, "Ошибка подключения к пользователю"
         tcp_socket.sendall(json.dumps({'username_initiator': self.username, 'public_key_initiator': self.auth_client.get_instance().public_key}).encode())
         
         response = json.loads(tcp_socket.recv(4096).decode())
 
         if 'username_reciever' not in response or "public_key_reciever" not in response:
-            print("Ошибка обмена ключами")
             tcp_socket.close()
-            return
+            return False, "Ошибка обмена ключами"
         
         un_reciever = response["username_reciever"]
+        self.reciever_name = un_reciever
         pk_reciever = response["public_key_reciever"]
-        key = self.auth_client.get_instance().generate_shared_secret(pk_reciever, echo_return_key=True)
+        self.key = self.auth_client.get_instance().generate_shared_secret(pk_reciever, echo_return_key=True)
 
-        send_to_sock_encrypted(key, tcp_socket, {"token" : token})
+        send_to_sock_encrypted(self.key, tcp_socket, {"token" : self.token})
 
-        data = recv_from_sock_encrypted(key, tcp_socket)
+        data = recv_from_sock_encrypted(self.key, tcp_socket)
         
         if not data or "token" not in data or not self.auth_client.check_token(data["token"], self.username):
-            print("Ошибка авторизации")
             tcp_socket.close()
-            return
+            return False, "Ошибка авторизации"
 
-        self.client_data[un_reciever] = Client(un_reciever, key=key, token=data["token"])
+        self.client_data[un_reciever] = Client(un_reciever, key=self.key, token=data["token"])
         for cl in self.client_data:
             self.client_data[cl].print()
 
-        want_share = int(input(f"Вы хотите делиться геопозицией с пользователем {un_reciever} ?"))
-        duplex = want_share
-        if want_share:
-            send_to_sock_encrypted(key, tcp_socket, {"action" : "duplex"})
-            data = recv_from_sock_encrypted(key, tcp_socket)    
+        #want_share = int(input(f"Вы хотите делиться геопозицией с пользователем {un_reciever} ?"))
+
+        if self.want_share:
+            send_to_sock_encrypted(self.key, tcp_socket, {"action" : "duplex"})
+            data = recv_from_sock_encrypted(self.key, tcp_socket)    
             if not data or "action" not in data:
-                print("Ошибка авторизации")
                 tcp_socket.close()
-                duplex = False
+                self.want_share = False
         else:
             tcp_socket.sendall(json.dumps({'error': "refused to share"}).encode())
 
         tcp_socket.close()
+        return True, "Success"
 
-
-        udp_reciever_thread = threading.Thread(target=udp_reciever, args=(6001, bytes(key), self.client_data[un_reciever].token, ))
+    def exchange_geoposition(self, signal):
+        udp_reciever_thread = threading.Thread(target=udp_reciever, args=(6001, bytes(self.key), self.client_data[self.reciever_name].token, signal ))
         udp_reciever_thread.start()
 
-        if duplex:
-            udp_sender_thread = threading.Thread(target=udp_sender, args=(6002, bytes(key), token, ))
+        if self.want_share:
+            udp_sender_thread = threading.Thread(target=udp_sender, args=(6002, bytes(self.key), self.token, ))
             udp_sender_thread.start()
             udp_sender_thread.join()
         udp_reciever_thread.join()
@@ -167,8 +191,18 @@ if __name__ == "__main__":
     auth.register(USERNAME, PASSWORD)
 
     if sys.argv[3] == "i":
-        Initiator(USERNAME, PASSWORD).work()
+        init = Initiator(USERNAME, PASSWORD)
+        init.want_get = True
+        init.want_share = True
+        print(init.exchange())
+        print(init.exchange_geoposition())
+        
     else:
-        Reciever(USERNAME, PASSWORD).work()
+        rec = Reciever(USERNAME, PASSWORD)
+        rec.want_share = True
+        rec.want_get = True
+        print(rec.get_conn())
+        print(rec.exchange())
+        print(rec.exchange_geoposition())
 
     
