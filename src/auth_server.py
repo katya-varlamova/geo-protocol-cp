@@ -27,7 +27,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY,
             username TEXT UNIQUE,
-            password TEXT
+            password TEXT,
+            address TEXT UNIQUE
         )
     ''')
     conn.commit()
@@ -43,12 +44,13 @@ def register():
     data = json.loads(decrypt_data(CLIENT_DATA[username].key, request.get_json()["data"]))
     username = data.get('username')
     password = data.get('password')
+    address = data.get('address')
 
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     
     try:
-        c.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
+        c.execute('INSERT INTO users (username, password, address) VALUES (?, ?, ?)', (username, password, address))
         conn.commit()
         return jsonify({"msg": "User registered successfully!"}), 201
     except sqlite3.IntegrityError:
@@ -69,14 +71,14 @@ def login():
     c = conn.cursor()
     c.execute('SELECT * FROM users WHERE username=? AND password=?', (username, password))
     user = c.fetchone()
-    
+    print(user)
     if user:
         enc = encrypt_data(CLIENT_DATA[username].key,
-                                    json.dumps({"token" : generate_jwt(username)}))
+                                    json.dumps({"token" : generate_jwt(username), "address" : user[3]}))
         print(enc)
         
-        access_token = enc
-        return jsonify(access_token=access_token), 200
+        data = enc
+        return jsonify(data=data), 200
     return jsonify({"msg": "Bad username or password"}), 401
 
 @app.route('/check_token', methods=['GET'])
@@ -100,17 +102,17 @@ def key_exchange():
     CLIENT_DATA[client] = Client(client, key=key)
     return jsonify({"server_public_key": INSTANCE_DH_SERVER.public_key}), 200
 
-##@app.route('/users', methods=['GET'])
-##def get_users():
-##    conn = sqlite3.connect('users.db')
-##    c = conn.cursor()
-##    
-##    try:
-##        c.execute('SELECT username from users;')
-##        return jsonify({"msg": "User registered successfully!"}), 201
-##    except sqlite3.IntegrityError:
-##        return jsonify({"msg": "Username already exists!"}), 400
-##    finally:
-##        conn.close()
+@app.route('/users', methods=['GET'])
+def get_users():
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT username, address FROM users')
+    users = cursor.fetchall()
+    user_list = [{'username': user[0], 'address': user[1]} for user in users]
+    conn.close()
+
+    return jsonify(user_list)
+
 if __name__ == '__main__':
     app.run(debug=True)

@@ -13,16 +13,12 @@ import random
 from auth_client import AuthClient
 from client import Reciever, Initiator
 
-MAP_HTML_PATH = "/home/kate/Desktop/geo_protocol/src/real_time_map.html"
-def generate_random_geoposition():
-  latitude = random.uniform(40.65, 40.85)
-  longitude = random.uniform(-74.10, -73.90)
-  return latitude, longitude
-
 import sys
 import time
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
 from PyQt5.QtWidgets import QMainWindow, QApplication
+
+MAP_HTML_PATH = "/home/kate/Desktop/geo_protocol/src/real_time_map.html"
 
 class GeopositionSignal(QObject):
     geopositionUpdated = pyqtSignal(tuple)
@@ -70,9 +66,7 @@ class MainWindow(QWidget):
             "login": self.create_login_page(),
             "role_selection": self.create_role_selection_page(),
             "registration": self.create_registration_page(),
-            #"initiator_connection": self.create_user_selection_page(),
             "waiting_connection_1": self.create_waiting_connection_1_page(),
-            #"waiting_connection_2": self.create_waiting_connection_2_page(),
             "geoposition" : self.create_geoposition_show_page()
         }
 
@@ -129,7 +123,7 @@ class MainWindow(QWidget):
         layout.addWidget(self.username_input)
         layout.addWidget(QLabel("Пароль"))
         layout.addWidget(self.password_input)
-        
+
         login_button = QPushButton("Войти")
         login_button.clicked.connect(self.handle_login)
         layout.addWidget(login_button)
@@ -176,7 +170,7 @@ class MainWindow(QWidget):
         
         if self.roles[self.ROLE_INITIATOR] == selected_role:
             self.client = Initiator(self.username, self.password)
-            users = self.auth_client.get_users()
+            users = [el["username"] + " [" + el["address"] + "]" for el in self.auth_client.get_users() if el["username"] != self.username]
             self.pages["initiator_connection"] = self.create_user_selection_page(users)
             self.show_page("initiator_connection")
         elif self.roles[self.ROLE_WAITER] == selected_role:
@@ -193,12 +187,15 @@ class MainWindow(QWidget):
         
         self.reg_username_input = QLineEdit()
         self.reg_password_input = QLineEdit()
+        self.reg_address_input = QLineEdit()
         self.reg_password_input.setEchoMode(QLineEdit.Password)
         
         layout.addWidget(QLabel("Логин"))
         layout.addWidget(self.reg_username_input)
         layout.addWidget(QLabel("Пароль"))
         layout.addWidget(self.reg_password_input)
+        layout.addWidget(QLabel("Адрес, на котором будет ожидаться соединение"))
+        layout.addWidget(self.reg_address_input)
 
         register_button = QPushButton("Зарегистрироваться")
         register_button.clicked.connect(self.handle_registration)
@@ -214,8 +211,9 @@ class MainWindow(QWidget):
     def handle_registration(self):
         username = self.reg_username_input.text()
         password = self.reg_password_input.text()
+        address = self.reg_address_input.text()
 
-        if self.auth_client.register(username, password):
+        if self.auth_client.register(username, password, address):
             QMessageBox.information(self, "Успех", "Регистрация прошла успешно!")
             self.show_page("login")
         else:
@@ -268,10 +266,10 @@ class MainWindow(QWidget):
 
         layout.addWidget(QLabel("Выберете того, чью геопозицию хотите видеть"))
 
-        user_combo = QComboBox()
-        user_combo.addItems(users)
+        self.user_combo = QComboBox()
+        self.user_combo.addItems(users)
 
-        layout.addWidget(user_combo)
+        layout.addWidget(self.user_combo)
 
         geo_question_label = QLabel("Хотите ли вы сами делиться гепозицией?")
         
@@ -297,8 +295,9 @@ class MainWindow(QWidget):
         return page
     
     def handle_connection_initiation(self, want_share):
+        reciever = self.user_combo.currentText()
         self.client.want_share = want_share
-        ret, message = self.client.exchange()
+        ret, message = self.client.exchange(reciever.split("[")[1].split("]")[0])
         if not ret:
             QMessageBox.warning(self, "Ошибка", message)
             self.show_page("role_selection")

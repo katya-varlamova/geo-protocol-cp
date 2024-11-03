@@ -17,11 +17,11 @@ class AuthClient:
             return None
         self.auth_server_key = self.instance_dh.generate_shared_secret(response.json()['server_public_key'], echo_return_key=True)
 
-    def register(self, username, password):
+    def register(self, username, password, address):
         self.change_keys(username)
         response = requests.post(f'{self.base_url}/register',
                     json= {'username': username,
-                            "data": encrypt_data(self.auth_server_key, json.dumps({'username': username, 'password': password}))} )
+                            "data": encrypt_data(self.auth_server_key, json.dumps({'username': username, 'password': password, "address" : address}))} )
         if response.status_code == 201:
             print("Register successful!")
             return "OK"
@@ -37,8 +37,9 @@ class AuthClient:
         
         if response.status_code == 200:
             print("Login successful!")
-            a = response.json()['access_token']
-            return json.loads(decrypt_data(self.auth_server_key, a))["token"]
+            a = response.json()['data']
+            data = json.loads(decrypt_data(self.auth_server_key, a))
+            return data["token"], data["address"]
         else:
             print("Login failed:", response.json())
             return None
@@ -50,10 +51,13 @@ class AuthClient:
                                     "token": encrypt_data(self.auth_server_key, json.dumps({'token': token}))} )
         
         return response.status_code == 200
+
     def get_instance(self):
         return self.instance_dh
+
     def get_users(self):
-        return ["test_katya_", "test_katya" ]
+        response = requests.get(f'{self.base_url}/users')
+        return response.json()
     
 if __name__ == "__main__":
     client = AuthClient()

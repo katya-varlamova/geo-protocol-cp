@@ -19,13 +19,11 @@ def udp_sender(port, key, cur_token):
         
         encrypted = encrypt_data(key, json.dumps(data))
         udp_socket.sendto(json.dumps({"data": encrypted}).encode(), ('localhost', port))
-
-        fn = data["frame_num"]
-        #print(f"Отправлено по UDP: {fn} {loc}")
-        time.sleep(0.3)
+        time.sleep(0.1)
 
 def udp_reciever(port, key, partner_token, signal):
     udp_receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     udp_receiver.bind(('localhost', port))
     start_time = time.time()
     udp_receiver.settimeout(5)
@@ -49,7 +47,6 @@ def udp_reciever(port, key, partner_token, signal):
             if int(fn) > last_fn:
                 signal.update_geoposition(loc)
                 last_fn = int(fn)
-                #print(f"Получено по UDP: {fn} {loc}")
         except socket.timeout:
             break
         if not data:
