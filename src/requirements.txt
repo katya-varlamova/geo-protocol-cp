@@ -1,0 +1,8 @@
+pyqt_loading_progressbar
+pyqt5
+PyQtWebEngine
+folium
+flask
+flask_jwt_extended
+geopy
+filterpy
