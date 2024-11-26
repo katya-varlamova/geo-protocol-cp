@@ -75,8 +75,7 @@ def login():
     if user:
         enc = encrypt_data(CLIENT_DATA[username].key,
                                     json.dumps({"token" : generate_jwt(username), "address" : user[3]}))
-        print(enc)
-        
+
         data = enc
         return jsonify(data=data), 200
     return jsonify({"msg": "Bad username or password"}), 401

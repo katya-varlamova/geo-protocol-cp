@@ -69,13 +69,6 @@ class Reciever:
                 self.active = False
                 return False, "Ошибка авторизации"
 
-            #want_share = int(input(f"Вы хотите делиться геопозицией с пользователем {un_initiator} ?"))
-            if not self.want_share:
-                self.conn.sendall(json.dumps({'error': "refused to share"}).encode())
-                self.conn.close()
-                self.tcp_socket.close()
-                self.active = False
-                return False, "Отказ делиться геопозицией"
             
             send_to_sock_encrypted(self.key, self.conn, {"token" : self.token})
 
@@ -86,17 +79,23 @@ class Reciever:
 
 
             data = recv_from_sock_encrypted(self.key, self.conn)
-
-            if not data or "action" not in data:
-                self.conn.sendall(json.dumps({'error': "refused to share"}).encode())
-                self.want_get = False
+ 
+             #want_share = int(input(f"Вы хотите делиться геопозицией с пользователем {un_initiator} ?"))
+            print(data)
+            if not self.want_share or not data or "action" not in data:
+                send_to_sock_encrypted(self.key, self.conn, {"error" : "refused to share"})
+                self.conn.close()
+                self.tcp_socket.close()
+                self.active = False
+                return False, "Отказ делиться геопозицией"
             else:
-                type_conn = "single"
-                if self.want_get:
-                    type_conn = "duplex"
-                    send_to_sock_encrypted(self.key, self.conn, {"action" : type_conn})
+                type_conn = data["action"]
+                if not self.want_get or not type_conn == "duplex":
+                    self.want_get = False
+                    type_conn = "single"
                 else:
-                    self.conn.sendall(json.dumps({'error': "refused to get"}).encode())
+                    self.want_get = True
+                send_to_sock_encrypted(self.key, self.conn, {"action" : type_conn})
             self.tcp_socket.close()
             self.tcp_socket = None
             self.active = False
@@ -104,7 +103,7 @@ class Reciever:
 
     def exchange_geoposition(self, signal):
         print("start")
-        udp_sender_thread = threading.Thread(target=udp_sender, args=(int(self.initiator_address), bytes(self.key), self.token,))
+        udp_sender_thread = threading.Thread(target=udp_sender, args=(int(self.initiator_address), bytes(self.key), self.token, 54820))
         udp_sender_thread.start()
     
         if self.want_get:
@@ -163,15 +162,19 @@ class Initiator:
         for cl in self.client_data:
             self.client_data[cl].print()
 
+        act = "single"
         if self.want_share:
-            send_to_sock_encrypted(self.key, tcp_socket, {"action" : "duplex"})
-            data = recv_from_sock_encrypted(self.key, tcp_socket)    
-            if not data or "action" not in data:
-                tcp_socket.close()
-                self.want_share = False
+            act = "duplex"
+        send_to_sock_encrypted(self.key, tcp_socket, {"action" : act})
+        data = recv_from_sock_encrypted(self.key, tcp_socket)
+          
+        if not data or "action" not in data:
+            tcp_socket.close()
+            return False, "Ошибка авторизации"
         else:
-            tcp_socket.sendall(json.dumps({'error': "refused to share"}).encode())
-
+            act = data["action"]
+            if act == "single":
+                self.want_share = False
         tcp_socket.close()
         return True, "Success"
 
@@ -180,7 +183,7 @@ class Initiator:
         udp_reciever_thread.start()
 
         if self.want_share:
-            udp_sender_thread = threading.Thread(target=udp_sender, args=(int(self.reciever_address), bytes(self.key), self.token, ))
+            udp_sender_thread = threading.Thread(target=udp_sender, args=(int(self.reciever_address), bytes(self.key), self.token, 13904 ))
             udp_sender_thread.start()
             udp_sender_thread.join()
         udp_reciever_thread.join()

@@ -6,14 +6,15 @@ import numpy as np
 from utils.filters import kalman_filter, sliding_window_filter
 
 class LocationService:
-    def __init__(self):
+    def __init__(self, seed=1):
         self.mul = 1
-        self.latitude = 55.7482
+        self.latitude = 55.7482 + seed / 10000
         self.longitude = 37.6171
         self.small_noise_level=0.0005
         self.large_noise_level=0.003
         self.big_noise_level=0.02
         self.positions = deque(maxlen=10)
+        np.random.seed(seed)
     def __get_real_location_data(self):
         try:
             response = requests.get("http://ip-api.com/json/")
