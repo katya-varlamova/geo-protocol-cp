@@ -34,9 +34,6 @@ class Reciever:
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.port = int(self.address.split(":")[1])
         self.ip = self.address.split(":")[0]
-        print(self.port)
-        print(self.ip)
-        print(self.address)
         try:
             self.tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.tcp_socket.bind(('localhost', int(self.port)))
@@ -55,7 +52,6 @@ class Reciever:
             return False, "Неправильный запрос от инициатора"
         self.initiator_name = request["username_initiator"]
         self.initiator_address = [el["address"]  for el in self.auth_client.get_users() if el["username"] == self.initiator_name][0]
-        print(self.initiator_address)
 
         pk_initiator = request["public_key_initiator"]
         self.key = self.auth_client.get_instance().generate_shared_secret(pk_initiator, echo_return_key=True)
@@ -87,7 +83,6 @@ class Reciever:
             data = recv_from_sock_encrypted(self.key, self.conn)
  
              #want_share = int(input(f"Вы хотите делиться геопозицией с пользователем {un_initiator} ?"))
-            print(data)
             if not self.want_share or not data or "action" not in data:
                 send_to_sock_encrypted(self.key, self.conn, {"error" : "refused to share"})
                 self.conn.close()
@@ -106,12 +101,10 @@ class Reciever:
             return True, "Success"
 
     def exchange_geoposition(self, signal):
-        print("start")
         udp_sender_thread = threading.Thread(target=udp_sender, args=(self.initiator_address, bytes(self.key), self.token, 54820))
         udp_sender_thread.start()
     
         if self.want_get:
-            print("get")
             udp_reciever_thread = threading.Thread(target=udp_reciever, args=(self.address, bytes(self.key), self.client_data[self.initiator_name].token, signal))
             udp_reciever_thread.start()
             udp_reciever_thread.join()
