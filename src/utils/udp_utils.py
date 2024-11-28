@@ -3,8 +3,10 @@ import json
 import time
 from utils.encryption_utils import encrypt_data, decrypt_data
 from utils.gps_utils import LocationService
-def udp_sender(port, key, cur_token, seed):
+def udp_sender(address, key, cur_token, seed):
     frame_num = 0
+    port = int(address.split(":")[1])
+    ip = address.split(":")[0]
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     start_time = time.time()
     service = LocationService(seed)
@@ -18,12 +20,13 @@ def udp_sender(port, key, cur_token, seed):
         }
         
         encrypted = encrypt_data(key, json.dumps(data))
-        udp_socket.sendto(json.dumps({"data": encrypted}).encode(), ('localhost', port))
+        udp_socket.sendto(json.dumps({"data": encrypted}).encode(), (ip, port))
         time.sleep(0.15)
 
-def udp_reciever(port, key, partner_token, signal):
+def udp_reciever(address, key, partner_token, signal):
     udp_receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_receiver.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    port = int(address.split(":")[1])
     udp_receiver.bind(('localhost', port))
     start_time = time.time()
     udp_receiver.settimeout(1)
