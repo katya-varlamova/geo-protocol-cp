@@ -82,17 +82,18 @@ def login():
 
 @app.route('/check_token', methods=['GET'])
 def check_token():
-    username = request.get_json()["username"]
+    username = request.args.get("username")
+    token = request.args.get("token")
     if username not in CLIENT_DATA or not CLIENT_DATA[username].key:
         return jsonify({"msg": "Key-exchamge needed!"}), 400
-    data = json.loads(decrypt_data(CLIENT_DATA[username].key, request.get_json()["token"]))
+    data = json.loads(decrypt_data(CLIENT_DATA[username].key, token))
     res = validate_jwt(data.get('token'))
     if not res:
         return jsonify({"msg": "Bad JWT: expired or invalid"}), 401
     else:
         return jsonify({"msg": "Check OK!"}), 200
 
-@app.route('/key_exchange', methods=['GET'])
+@app.route('/key_exchange', methods=['POST'])
 def key_exchange():
     data = request.get_json()
     client_public_key = data["client_public_key"]

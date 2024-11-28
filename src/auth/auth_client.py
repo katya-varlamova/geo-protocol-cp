@@ -11,7 +11,7 @@ class AuthClient:
         self.base_url = url
 
     def change_keys(self, username):
-        response = requests.get(f'{self.base_url}/key_exchange', json={'username': username, 'client_public_key': self.instance_dh.public_key})
+        response = requests.post(f'{self.base_url}/key_exchange', json={'username': username, 'client_public_key': self.instance_dh.public_key})
         if response.status_code != 200:
             print("Key exchange failed:", response.json())
             return None
@@ -47,7 +47,7 @@ class AuthClient:
     def check_token(self, token, username):
         self.change_keys(username)
         response = requests.get(f'{self.base_url}/check_token',
-                                json= {'username': username,
+                                params= {'username': username,
                                     "token": encrypt_data(self.auth_server_key, json.dumps({'token': token}))} )
         
         return response.status_code == 200
