@@ -43,7 +43,6 @@ class Reciever:
         
         print("Ожидание подключения...")
         self.conn, addr = self.tcp_socket.accept()
-        self.tcp_socket.close()
         self.active = True
         request = json.loads(self.conn.recv(4096).decode())
         if "username_initiator" not in request or "public_key_initiator" not in request:
@@ -83,29 +82,36 @@ class Reciever:
             data = recv_from_sock_encrypted(self.key, self.conn)
  
              #want_share = int(input(f"Вы хотите делиться геопозицией с пользователем {un_initiator} ?"))
-            if not self.want_share or not data or "action" not in data:
+            if not self.want_share or not data or "action" not in data  or "port" not in data:
                 send_to_sock_encrypted(self.key, self.conn, {"error" : "refused to share"})
                 self.conn.close()
                 self.active = False
                 return False, "Отказ делиться геопозицией"
             else:
                 type_conn = data["action"]
+                self.sender_port = data["port"]
                 if not self.want_get or not type_conn == "duplex":
                     self.want_get = False
                     type_conn = "single"
+                    send_to_sock_encrypted(self.key, self.conn, {"action" : type_conn})
                 else:
+                    self.udp_socket_reciever = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    self.udp_socket_reciever.bind(('', 0))
+                    self.udp_socket_reciever_port = self.udp_socket_reciever.getsockname()[1]
                     self.want_get = True
-                send_to_sock_encrypted(self.key, self.conn, {"action" : type_conn})
+                    send_to_sock_encrypted(self.key, self.conn, {"action" : type_conn, "port" : self.udp_socket_reciever_port})
+                
             self.tcp_socket = None
             self.active = False
+            self.tcp_socket.close()
             return True, "Success"
 
     def exchange_geoposition(self, signal):
-        udp_sender_thread = threading.Thread(target=udp_sender, args=(self.initiator_address, bytes(self.key), self.token, 54820))
+        udp_sender_thread = threading.Thread(target=udp_sender, args=(self.initiator_address, self.sender_port, bytes(self.key), self.token, 54820))
         udp_sender_thread.start()
     
         if self.want_get:
-            udp_reciever_thread = threading.Thread(target=udp_reciever, args=(self.address, bytes(self.key), self.client_data[self.initiator_name].token, signal))
+            udp_reciever_thread = threading.Thread(target=udp_reciever, args=(self.udp_socket_reciever, bytes(self.key), self.client_data[self.initiator_name].token, signal))
             udp_reciever_thread.start()
             udp_reciever_thread.join()
         udp_sender_thread.join()
@@ -161,28 +167,40 @@ class Initiator:
         for cl in self.client_data:
             self.client_data[cl].print()
 
+        self.udp_socket_reciever = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp_socket_reciever.bind(('', 0))
+        self.udp_socket_reciever_port = self.udp_socket_reciever.getsockname()[1]
         act = "single"
         if self.want_share:
             act = "duplex"
-        send_to_sock_encrypted(self.key, tcp_socket, {"action" : act})
+        send_to_sock_encrypted(self.key, tcp_socket, {"action" : act, "port" : self.udp_socket_reciever_port})
+
         data = recv_from_sock_encrypted(self.key, tcp_socket)
           
         if not data or "action" not in data:
             tcp_socket.close()
+            self.udp_socket_reciever.close()
             return False, "Ошибка авторизации"
         else:
             act = data["action"]
             if act == "single":
                 self.want_share = False
+            else:
+                if "port" not in data:
+                    tcp_socket.close()
+                    self.udp_socket_reciever.close()
+                    return False, "Ошибка авторизации"
+                else:
+                    self.udp_socket_sender_port = data["port"]
         tcp_socket.close()
         return True, "Success"
 
     def exchange_geoposition(self, signal):
-        udp_reciever_thread = threading.Thread(target=udp_reciever, args=(self.address, bytes(self.key), self.client_data[self.reciever_name].token, signal ))
+        udp_reciever_thread = threading.Thread(target=udp_reciever, args=(self.udp_socket_reciever, bytes(self.key), self.client_data[self.reciever_name].token, signal ))
         udp_reciever_thread.start()
 
         if self.want_share:
-            udp_sender_thread = threading.Thread(target=udp_sender, args=(self.reciever_address, bytes(self.key), self.token, 13904 ))
+            udp_sender_thread = threading.Thread(target=udp_sender, args=(self.reciever_address, self.udp_socket_sender_port, bytes(self.key), self.token, 13904 ))
             udp_sender_thread.start()
             udp_sender_thread.join()
         udp_reciever_thread.join()
